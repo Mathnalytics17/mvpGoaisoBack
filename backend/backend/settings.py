@@ -53,11 +53,22 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
+
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
+    "https://mvpgoaiso.com",
+    "https://www.mvpgoaiso.com",
 ]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://mvpgoaiso.com",
+    "https://www.mvpgoaiso.com",
+]
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 ROOT_URLCONF = "backend.urls"
-FRONTEND_BASE_URL = "http://localhost:3000"
+FRONTEND_BASE_URL = "https://mvpgoaiso.com/assistant"
 
 TEMPLATES = [
     {
