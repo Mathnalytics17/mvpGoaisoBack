@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gnupg \
     ca-certificates \
+    git \
     # libs típicas que necesita chromium
     libnss3 \
     libatk1.0-0 \
