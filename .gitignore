@@ -1,0 +1,29 @@
+# Env
+.env
+**/.env
+
+# Node / Next
+frontend/node_modules
+frontend/.next
+frontend/out
+
+# Python / Django
+backend/venv
+**/__pycache__/
+**/*.pyc
+
+# Local DB (si existe)
+backend/db.sqlite3
+
+# OS
+.DS_Store
+# Node en general (por si hay package.json en backend o frontend)
+**/node_modules/
+**/.next/
+**/out/
+
+# Puppeteer / Playwright caches (según cómo se instaló)
+**/.cache/puppeteer/
+**/.local-chromium/
+**/playwright/.cache/
+**/.cache/ms-playwright/
