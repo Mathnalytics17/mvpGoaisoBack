@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   db:
     image: postgres:16
@@ -9,6 +11,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - appnet
+    restart: unless-stopped
 
   backend:
     build:
@@ -22,6 +25,19 @@ services:
       - backend_media:/app/media
     networks:
       - appnet
+    restart: unless-stopped
+    # Opcional (solo para debug desde el host; nginx no lo necesita)
+    expose:
+      - "8000"
+    # ✅ Evita 500 por worker timeout al hacer web_search/OpenAI/puppeteer
+    command: >
+      gunicorn backend.wsgi:application
+      --bind 0.0.0.0:8000
+      --workers 3
+      --timeout 180
+      --graceful-timeout 30
+      --access-logfile -
+      --error-logfile -
 
   frontend:
     build:
@@ -30,6 +46,9 @@ services:
       NODE_ENV: production
     networks:
       - appnet
+    restart: unless-stopped
+    expose:
+      - "3000"
 
   nginx:
     image: nginx:1.27
@@ -44,11 +63,13 @@ services:
       - backend_static:/var/www/static:ro
       - backend_media:/var/www/media:ro
 
-      # certbot
-      - certbot_www:/var/www/certbot:ro
+      # ✅ certbot webroot debe ser RW para que nginx pueda servir el challenge
+      - certbot_www:/var/www/certbot
+      # ✅ nginx necesita leer los certs
       - certbot_etc:/etc/letsencrypt:ro
     networks:
       - appnet
+    restart: unless-stopped
 
   certbot:
     image: certbot/certbot:latest
@@ -57,6 +78,8 @@ services:
       - certbot_etc:/etc/letsencrypt
     depends_on:
       - nginx
+    # No necesita restart; se usa con "docker-compose run --rm certbot ..."
+    restart: "no"
 
 volumes:
   postgres_data:
