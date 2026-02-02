@@ -8,39 +8,58 @@ def geo_text(country: str | None = None, location: str | None = None) -> str:
     return ""
 
 
-def prompt_toon_phase1(product_type, criteria_str, country=None, location=None):
+def prompt_phase1(product_type, criteria_str, country=None, location=None):
     geo = geo_text(country, location)
     return f"""
-Return ONE LINE ONLY.
+You are generating structured data.
 
-Task: recommend the 5 best {product_type} today {geo} based on: {criteria_str}.
+Task: Recommend the 5 best {product_type} today {geo} based on: {criteria_str}.
 Use web_search.
 
-Rules:
-- Exactly 5 items separated by commas
-- Each item MUST be: Brand | Model
-- Keep brand casing consistent (use the brand's official casing; do not output the same brand with different casing)
-- No quotes. No extra text.
+Return ONLY valid JSON (no markdown, no extra text) with this exact shape:
+{{
+  "ranking": [
+    {{"brand": "...", "model": "..."}},
+    {{"brand": "...", "model": "..."}},
+    {{"brand": "...", "model": "..."}},
+    {{"brand": "...", "model": "..."}},
+    {{"brand": "...", "model": "..."}}
+  ],
+  "notes": "optional short note"
+}}
 
-OUTPUT MUST BE EXACTLY:
-ranking[5]: Brand | Model,Brand | Model,Brand | Model,Brand | Model,Brand | Model
+Rules:
+- ranking MUST have exactly 5 items.
+- brand should be the brand name only (e.g., "Nike", "ASICS", "New Balance").
+- model should be the model name only (may contain commas; that's OK).
+- No URLs.
 """
 
 
-def prompt_toon_phase2(product_type: str, criterion: str, country=None, location=None) -> str:
+
+def prompt_phase2(product_type: str, criterion: str, country=None, location=None) -> str:
     geo = geo_text(country, location)
     return f"""
-Return ONE LINE ONLY.
+You are generating structured data.
 
-Task: recommend the 5 best {product_type} today {geo}, focusing ONLY on this criterion: {criterion}.
+Task: Recommend the 5 best {product_type} today {geo}, focusing ONLY on this criterion: {criterion}.
 Use web_search.
 
-Rules:
-- Exactly 5 items separated by commas
-- Each item MUST be: Brand | Model
-- Keep brand casing consistent (use the brand's official casing; do not output the same brand with different casing)
-- No quotes. No extra text.
+Return ONLY valid JSON (no markdown, no extra text) with this exact shape:
+{{
+  "ranking": [
+    {{"brand": "...", "model": "..."}},
+    {{"brand": "...", "model": "..."}},
+    {{"brand": "...", "model": "..."}},
+    {{"brand": "...", "model": "..."}},
+    {{"brand": "...", "model": "..."}}
+  ],
+  "notes": "optional short note"
+}}
 
-OUTPUT MUST BE EXACTLY:
-ranking[5]: Brand | Model,Brand | Model,Brand | Model,Brand | Model,Brand | Model
+Rules:
+- ranking MUST have exactly 5 items.
+- brand should be the brand name only.
+- model should be the model name only.
+- No URLs.
 """

@@ -1,47 +1,23 @@
 from itertools import permutations
 import random
+import json
+import os
+import tempfile
+import subprocess
 
+from django.conf import settings
+from django.db import transaction
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-
-from toon_format import decode
-from collections import Counter
-from apps.results.api.models.index import (
-    Evaluation,
-    EvaluationCriterion,
-    PromptRun,
-    RankingItem,
-    RankingSummary,
-)
-from django.db import transaction
-from apps.results.api.serializers.index import (
-    EvaluationSerializer,
-    EvaluationCreateSerializer,
-)
-
-from apps.results.services.prompts import (
-    prompt_toon_phase1,
-    prompt_toon_phase2,
-)
-
-from apps.results.services.scoring import compute_brand_summary
-from apps.results.services.parse_ranking import parse_ranking
-
-from apps.results.utils.open_ai_client import completion_with_web_search
-
-
-
-from django.http import HttpResponse
 from django.utils.timezone import now
 
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny
 from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from django_filters.rest_framework import DjangoFilterBackend
 
@@ -49,23 +25,32 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 from openpyxl.utils import get_column_letter
 
-from apps.results.api.models.index import InformeDataUsers
-from apps.results.api.serializers.index import InformeDataUsersCreateSerializer, InformeDataUsersListSerializer
+from apps.results.api.models.index import (
+    Evaluation,
+    EvaluationCriterion,
+    PromptRun,
+    RankingItem,
+    RankingSummary,
+    InformeDataUsers,
+)
 
+from apps.results.api.serializers.index import (
+    EvaluationSerializer,
+    EvaluationCreateSerializer,
+    InformeDataUsersCreateSerializer,
+    InformeDataUsersListSerializer,
+)
 
-from apps.results.api.models.index import Evaluation
+from apps.results.services.prompts import (
+    prompt_phase1,
+    prompt_phase2,
+)
+
+from apps.results.services.parse_ranking import parse_ranking
 from apps.results.services.report import build_report
+from apps.results.services.scoring import compute_brand_summary
+from apps.results.utils.open_ai_client import completion_with_web_search
 
-
-
-import os
-import tempfile
-import subprocess
-
-from django.conf import settings
-from django.http import FileResponse, HttpResponse
-from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
 
 # ✅ helper para seleccionar 5 permutaciones sin repetir el mismo inicio
 def select_permutations_unique_start(permutations_list, count=5):
@@ -88,6 +73,7 @@ def select_permutations_unique_start(permutations_list, count=5):
             break
 
     return selected
+
 
 class EvaluationCreateView(APIView):
     def post(self, request):
@@ -142,24 +128,18 @@ class EvaluationListView(APIView):
 
 class JsonToToonView(APIView):
     """
-    POST /api/results/json-to-toon/
-    Body: JSON
-    Response: TOON (string)
+    (LEGACY) End-point dejado por compatibilidad.
+    Si ya no usas TOON, puedes borrar esta vista y su ruta.
     """
 
     def post(self, request):
-        try:
-            toon_text = encode(request.data)
-            return Response({"toon": toon_text}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response(
-                {"error": "No se pudo convertir a TOON", "details": str(e)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        return Response(
+            {"error": "TOON deshabilitado. Usa JSON."},
+            status=status.HTTP_410_GONE,
+        )
 
 
 class RunEvaluationView(APIView):
-
     def post(self, request, uuid):
 
         # ==========================
@@ -188,7 +168,6 @@ class RunEvaluationView(APIView):
         # ==========================
         # ✅ Ya salimos del lock, empieza el proceso real
         # ==========================
-
         try:
             criteria_qs = evaluation.criteria.all().order_by("order")
             criteria = [c.name for c in criteria_qs]
@@ -210,43 +189,33 @@ class RunEvaluationView(APIView):
             for perm in selected_perms:
                 criteria_str = ", ".join(perm)
 
-                prompt = prompt_toon_phase1(
+                prompt = prompt_phase1(
                     evaluation.product_type,
                     criteria_str,
                     country=evaluation.country,
-                    location=evaluation.location
+                    location=evaluation.location,
                 )
 
-                toon_text, sources = completion_with_web_search(prompt)
+                output_text, sources = completion_with_web_search(prompt)
 
+                # ✅ parse JSON tolerante
                 try:
-                    decoded = decode(toon_text)
-                except Exception as e:
-                    evaluation.status = "ERROR"
-                    evaluation.save()
-                    return Response(
-                        {"error": "TOON inválido PHASE1", "toon": toon_text, "details": str(e)},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+                    decoded = json.loads(output_text) if output_text else {}
+                except Exception:
+                    decoded = {}
 
-                parsed = parse_ranking(decoded)
-                if not parsed or len(parsed) != 5:
-                    evaluation.status = "ERROR"
-                    evaluation.save()
-                    return Response(
-                        {"error": "ranking inválido PHASE1", "decoded": decoded, "toon": toon_text},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+                parsed = parse_ranking(decoded) or []
 
                 run = PromptRun.objects.create(
                     evaluation=evaluation,
                     phase="PHASE1",
                     prompt_text=prompt,
-                    response_raw=toon_text,
+                    response_raw=output_text,
                     sources=sources,
                 )
 
-                for item in parsed:
+                # ✅ no matar la app si viene mal; simplemente guarda lo que haya (máx 5)
+                for item in parsed[:5]:
                     RankingItem.objects.create(
                         prompt_run=run,
                         position=item["position"],
@@ -262,45 +231,32 @@ class RunEvaluationView(APIView):
             # =========================
             for criterion_obj in criteria_qs:
                 for _ in range(5):
-
-                    prompt = prompt_toon_phase2(
+                    prompt = prompt_phase2(
                         evaluation.product_type,
                         criterion_obj.name,
                         country=evaluation.country,
-                        location=evaluation.location
+                        location=evaluation.location,
                     )
 
-                    toon_text, sources = completion_with_web_search(prompt)
+                    output_text, sources = completion_with_web_search(prompt)
 
                     try:
-                        decoded = decode(toon_text)
-                    except Exception as e:
-                        evaluation.status = "ERROR"
-                        evaluation.save()
-                        return Response(
-                            {"error": "TOON inválido PHASE2", "toon": toon_text, "details": str(e)},
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
+                        decoded = json.loads(output_text) if output_text else {}
+                    except Exception:
+                        decoded = {}
 
-                    parsed = parse_ranking(decoded)
-                    if not parsed or len(parsed) != 5:
-                        evaluation.status = "ERROR"
-                        evaluation.save()
-                        return Response(
-                            {"error": "ranking inválido PHASE2", "decoded": decoded, "toon": toon_text},
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
+                    parsed = parse_ranking(decoded) or []
 
                     run = PromptRun.objects.create(
                         evaluation=evaluation,
                         phase="PHASE2",
                         criterion=criterion_obj,
                         prompt_text=prompt,
-                        response_raw=toon_text,
+                        response_raw=output_text,
                         sources=sources,
                     )
 
-                    for item in parsed:
+                    for item in parsed[:5]:
                         RankingItem.objects.create(
                             prompt_run=run,
                             position=item["position"],
@@ -329,7 +285,6 @@ class RunEvaluationView(APIView):
                 {"error": "Error inesperado ejecutando evaluación", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
 
 
 class EvaluationReportView(APIView):
@@ -363,16 +318,9 @@ def apply_filters(request, qs):
         qs = qs.filter(movil__icontains=movil)
 
     if search:
-        # search global
-        qs = qs.filter(
-            nombre__icontains=search
-        ) | qs.filter(
-            email__icontains=search
-        ) | qs.filter(
+        qs = qs.filter(nombre__icontains=search) | qs.filter(email__icontains=search) | qs.filter(
             movil__icontains=search
-        ) | qs.filter(
-            evaluation__uuid__icontains=search
-        )
+        ) | qs.filter(evaluation__uuid__icontains=search)
 
     ordering = (request.GET.get("ordering") or "-id").strip()
     allowed = {"id", "-id", "nombre", "-nombre", "email", "-email"}
@@ -390,7 +338,6 @@ class InformeDataUsersAPIView(APIView):
           GET /api/results/report/users/?page=1&page_size=20&search=...
         """
         qs = InformeDataUsers.objects.select_related("evaluation").all()
-
         qs = apply_filters(request, qs)
 
         # paginación
@@ -433,11 +380,7 @@ class InformeDataUsersAPIView(APIView):
         lead = serializer.save()
 
         return Response(
-            {
-                "ok": True,
-                "id": lead.id,
-                "evaluation_uuid": str(lead.evaluation.uuid),
-            },
+            {"ok": True, "id": lead.id, "evaluation_uuid": str(lead.evaluation.uuid)},
             status=status.HTTP_201_CREATED,
         )
 
@@ -491,6 +434,8 @@ class InformeDataUsersExportAPIView(APIView):
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         wb.save(resp)
         return resp
+
+
 class EvaluationReportPDFView(APIView):
     """
     GET /api/results/<uuid>/report/pdf/
@@ -499,20 +444,19 @@ class EvaluationReportPDFView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, uuid):
-        # URL del frontend accesible desde backend
         front_base = getattr(settings, "FRONTEND_BASE_URL", "http://localhost:3000")
         report_url = f"{front_base}/results/{uuid}?pdf=1"
 
-        script_path = os.path.join(settings.BASE_DIR, "apps","base","scripts", "render_report_pdf.js")
+        script_path = os.path.join(
+            settings.BASE_DIR, "apps", "base", "scripts", "render_report_pdf.js"
+        )
 
-        # Archivo temporal
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
         out_path = tmp.name
         tmp.close()
 
         try:
-            # Ejecuta Node + Puppeteer
-            completed = subprocess.run(
+            subprocess.run(
                 ["node", script_path, report_url, out_path],
                 capture_output=True,
                 text=True,
@@ -534,6 +478,5 @@ class EvaluationReportPDFView(APIView):
                 content_type="text/plain",
             )
         finally:
-            # (Opcional) borrar el archivo luego con un cleanup job
-            # No lo borro aquí por seguridad con FileResponse en algunos entornos.
+            # No se borra aquí por seguridad con FileResponse en algunos entornos.
             pass
