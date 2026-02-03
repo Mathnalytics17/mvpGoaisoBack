@@ -12,7 +12,7 @@ from apps.results.api.views.index import (
     InformeDataUsersExportAPIView,
     InformeDataUsersAPIView,
 )
-
+from apps.results.api.views.index import EvaluationReportSendEmailView 
 urlpatterns = [
     path("results/json-to-toon/", JsonToToonView.as_view(), name="json-to-toon"),
 
@@ -28,7 +28,7 @@ urlpatterns = [
 
     # ✅ PDF (ahora imprime el HTML print)
     path("results/<uuid:uuid>/report/pdf/", EvaluationReportPDFView.as_view(), name="report-pdf"),
-
+path("results/<uuid:uuid>/report/email/", EvaluationReportSendEmailView.as_view(), name="report-email"),
     path("results/report/users/", InformeDataUsersAPIView.as_view(), name="results-report-users"),
     path("results/report/users/export/", InformeDataUsersExportAPIView.as_view(), name="results-report-users-export"),
 ]

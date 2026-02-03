@@ -17,7 +17,7 @@ import {
   LabelList,
 } from "recharts";
 import LeadGateModal from "../../../components/modals/LeadGateModal";
-
+import toast from "react-hot-toast";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 // 🎨 Colores distintos
@@ -118,7 +118,25 @@ export default function ResultsPage() {
   const isPdf = searchParams?.get("pdf") === "1";
 
   const [unlocked, setUnlocked] = useState(false);
+ const handleSendEmail = async () => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/results/${uuid}/report/email/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // body vacío: tomará el email asociado en InformeDataUsers (último)
+      body: JSON.stringify({}),
+    });
 
+    const json = await res.json();
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.error || "No se pudo enviar el correo");
+    }
+
+    toast.success(`Informe enviado a ${json.sent_to}`);
+  } catch (e: any) {
+    toast.error(e?.message || "Error enviando el informe");
+  }
+};
   useEffect(() => {
     if (!uuid) return;
 
@@ -227,6 +245,13 @@ export default function ResultsPage() {
                   Descargar PDF
                 </button>
               )}
+                            <button
+                      type="button"
+                      className="text-xs font-semibold px-3 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition text-white/80 ml-2"
+                      onClick={handleSendEmail}
+                    >
+                      Enviar por correo
+                    </button>
 
               <h1 className="results-title" >
                 Producto/servicio: <span>{data.product_type}</span> 

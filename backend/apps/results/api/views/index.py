@@ -47,7 +47,7 @@ from apps.results.services.parse_ranking import parse_ranking
 from apps.results.services.report import build_report
 from apps.results.services.scoring import compute_brand_summary
 from apps.results.utils.open_ai_client import completion_with_web_search
-
+from apps.results.services.email_report import send_report_pdf_email
 
 # ✅ helper para seleccionar 5 permutaciones sin repetir el mismo inicio
 def select_permutations_unique_start(permutations_list, count=5):
@@ -479,4 +479,49 @@ class EvaluationReportPDFView(APIView):
                 + (e.stderr or ""),
                 status=500,
                 content_type="text/plain",
+            )
+class EvaluationReportSendEmailView(APIView):
+    """
+    POST /api/results/<uuid>/report/email/
+    Envía el PDF al email asociado (InformeDataUsers) o al email que venga en el body.
+    Body opcional:
+      { "email": "destino@..." }
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, uuid):
+        evaluation = get_object_or_404(Evaluation, uuid=uuid)
+
+        # 1) si viene email explícito, lo usamos
+        email = (request.data.get("email") or "").strip()
+
+        # 2) si no viene, buscamos el último lead guardado para ese informe
+        if not email:
+            lead = (
+                InformeDataUsers.objects
+                .filter(evaluation=evaluation)
+                .order_by("-id")
+                .first()
+            )
+            if lead:
+                email = (lead.email or "").strip()
+
+        if not email:
+            return Response(
+                {"ok": False, "error": "No hay email asociado a este informe."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            send_report_pdf_email(
+                to_email=email,
+                uuid_str=str(evaluation.uuid),
+                product_type=evaluation.product_type,
+            )
+            return Response({"ok": True, "sent_to": email}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {"ok": False, "error": "No se pudo enviar el correo", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
