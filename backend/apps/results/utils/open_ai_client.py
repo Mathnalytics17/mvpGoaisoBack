@@ -1,15 +1,16 @@
 import os
 import time
-import logging
+import json
+
+import re
 from datetime import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
-from toon_format import decode
 
 from openpyxl import Workbook, load_workbook
-from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, Alignment
 
+import logging
 load_dotenv()
 
 # -------------------------
@@ -30,8 +31,8 @@ if not logger.handlers:
 # OpenAI client
 # -------------------------
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+logger.debug(os.getenv("OPENAI_API_KEY"))
 DEFAULT_MODEL = "gpt-4o-mini"
-
 
 # -------------------------
 # Excel helpers
@@ -46,6 +47,7 @@ HEADERS = [
     "evaluation_uuid",
     "attempt",
     "elapsed_seconds",
+    # antes era "toon_valid"; lo dejo igual para no romper tu Excel existente
     "toon_valid",
     "prompt",
     "output_text",
@@ -63,26 +65,24 @@ def ensure_workbook(path: str) -> tuple[Workbook, any]:
         ws.title = "logs"
         ws.append(HEADERS)
 
-        # estilo header
         header_font = Font(bold=True)
         for col_idx in range(1, len(HEADERS) + 1):
             cell = ws.cell(row=1, column=col_idx)
             cell.font = header_font
             cell.alignment = Alignment(vertical="center")
 
-        # anchos razonables
         widths = {
-            "A": 20,  # timestamp
-            "B": 14,  # model
-            "C": 10,  # phase
-            "D": 18,  # criterion
-            "E": 38,  # evaluation_uuid
-            "F": 8,   # attempt
-            "G": 14,  # elapsed
-            "H": 10,  # valid
-            "I": 70,  # prompt
-            "J": 70,  # output
-            "K": 70,  # sources
+            "A": 20,
+            "B": 14,
+            "C": 10,
+            "D": 18,
+            "E": 38,
+            "F": 8,
+            "G": 14,
+            "H": 10,  # "toon_valid" (ahora significa JSON válido)
+            "I": 70,
+            "J": 70,
+            "K": 70,
         }
         for col_letter, w in widths.items():
             ws.column_dimensions[col_letter].width = w
@@ -91,6 +91,7 @@ def ensure_workbook(path: str) -> tuple[Workbook, any]:
         ws.auto_filter.ref = ws.dimensions
 
     return wb, ws
+
 
 def append_log_row(
     xlsx_path: str,
@@ -109,7 +110,7 @@ def append_log_row(
     wb, ws = ensure_workbook(xlsx_path)
 
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    sources_str = " | ".join(sources)  # una celda
+    sources_str = " | ".join(sources)
 
     ws.append([
         ts,
@@ -125,20 +126,33 @@ def append_log_row(
         sources_str,
     ])
 
-    # refresca autofiltro (por si crece)
     ws.auto_filter.ref = ws.dimensions
-
     wb.save(xlsx_path)
-
 
 # -------------------------
 # Core logic
 # -------------------------
 def _clean_output_text(text: str) -> str:
+    """
+    Limpia wrappers típicos (```json ... ```) y espacios.
+    """
     text = (text or "").strip()
-    text = text.replace("\n", " ").strip()
-    text = text.replace("```", "").strip()
+
+    # eliminar fences
+    text = text.replace("```json", "").replace("```", "").strip()
+
+    # si viene con texto antes/después, intenta recortar al JSON
+    # (busca primer { y último })
+    if "{" in text and "}" in text:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            text = text[start:end+1].strip()
+
+    # colapsar espacios raros
+    text = re.sub(r"\s+", " ", text).strip()
     return text
+
 
 def _extract_sources(res) -> list[str]:
     sources = []
@@ -156,16 +170,46 @@ def _extract_sources(res) -> list[str]:
 
     return list(dict.fromkeys(sources))[:10]
 
-def _is_valid_toon_ranking5(output_text: str) -> bool:
+
+def _safe_json_loads(text: str) -> dict | None:
+    """
+    Intenta cargar JSON. Si falla, devuelve None.
+    """
     try:
-        decoded = decode(output_text)
-        return (
-            "ranking" in decoded
-            and isinstance(decoded["ranking"], list)
-            and len(decoded["ranking"]) == 5
-        )
+        return json.loads(text)
     except Exception:
+        return None
+
+
+def _is_valid_json_ranking(decoded: dict) -> bool:
+    """
+    Valida que exista ranking como lista con al menos 3 items.
+    (Flexible para no romper por respuestas incompletas)
+    Acepta:
+      - [{"brand": "...", "model": "..."}, ...]
+      - ["Brand | Model", ...]  (fallback)
+    """
+    if not isinstance(decoded, dict):
         return False
+
+    ranking = decoded.get("ranking")
+    if not isinstance(ranking, list) or len(ranking) < 3:
+        return False
+
+    # Validación suave: que los primeros 3 tengan contenido
+    ok = 0
+    for it in ranking[:5]:
+        if isinstance(it, dict):
+            b = str(it.get("brand", "")).strip()
+            m = str(it.get("model", "")).strip()
+            if b and m:
+                ok += 1
+        else:
+            s = str(it).strip()
+            if s:
+                ok += 1
+
+    return ok >= 3
 
 
 def completion_with_web_search(
@@ -180,7 +224,9 @@ def completion_with_web_search(
 ):
     """
     ✅ web_search + logs + retry
-    ✅ guarda CADA intento en Excel (para pruebas)
+    ✅ Ya NO usa TOON. Ahora espera JSON.
+    ✅ Flexible: si hay JSON con ranking >= 3, lo acepta.
+    ✅ Nunca rompe por separadores/comas/etc.
     """
 
     last_output_text = ""
@@ -194,6 +240,7 @@ def completion_with_web_search(
         logger.debug(f"[WEBSEARCH] Model: {model}")
         logger.debug(f"[PROMPT PREVIEW] {prompt[:250]}...")
 
+        # OJO: sigue usando tools web_search
         res = client.responses.create(
             model=model,
             input=prompt,
@@ -205,12 +252,13 @@ def completion_with_web_search(
         output_text = _clean_output_text(res.output_text)
         sources = _extract_sources(res)
 
-        valid = _is_valid_toon_ranking5(output_text)
+        decoded = _safe_json_loads(output_text)
+        valid = _is_valid_json_ranking(decoded) if decoded else False
 
         logger.debug(f"[OUTPUT RAW] {output_text[:400]}...")
         logger.debug(f"[TIME] {elapsed}s")
         logger.debug(f"[SOURCES] {len(sources)} found")
-        logger.debug(f"[TOON VALID] {valid}")
+        logger.debug(f"[JSON VALID] {valid}")
 
         # ✅ guarda SIEMPRE el intento en Excel
         append_log_row(
@@ -218,7 +266,7 @@ def completion_with_web_search(
             model=model,
             attempt=attempt,
             elapsed=elapsed,
-            toon_valid=valid,
+            toon_valid=valid,  # ahora significa JSON válido (mantengo columna)
             prompt=prompt,
             output_text=output_text,
             sources=sources,
@@ -233,8 +281,10 @@ def completion_with_web_search(
         if valid:
             return output_text, sources
 
-        logger.warning("[RETRYING] TOON inválido, intentando de nuevo...")
+        # retry suave
+        logger.warning("[RETRYING] JSON inválido o ranking insuficiente, intentando de nuevo...")
         time.sleep(1)
 
-    logger.error("[FAILED] No se obtuvo TOON válido tras varios intentos")
+    logger.error("[FAILED] No se obtuvo JSON válido tras varios intentos")
+    # ✅ no matamos: devolvemos lo último, aunque sea inválido
     return last_output_text, last_sources
