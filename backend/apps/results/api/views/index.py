@@ -1,25 +1,22 @@
-from itertools import permutations
-import random
 import json
 import os
+import random
 import tempfile
 import subprocess
+from itertools import permutations
 
 from django.conf import settings
 from django.db import transaction
 from django.http import FileResponse, HttpResponse
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.timezone import now
 
-from rest_framework import status, viewsets
-from rest_framework.decorators import action
-from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
-from django_filters.rest_framework import DjangoFilterBackend
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
@@ -129,7 +126,6 @@ class EvaluationListView(APIView):
 class JsonToToonView(APIView):
     """
     (LEGACY) End-point dejado por compatibilidad.
-    Si ya no usas TOON, puedes borrar esta vista y su ruta.
     """
 
     def post(self, request):
@@ -143,30 +139,27 @@ class RunEvaluationView(APIView):
     def post(self, request, uuid):
 
         # ==========================
-        # ✅ LOCK POR UUID (evita dobles ejecuciones)
+        # ✅ LOCK POR UUID
         # ==========================
         with transaction.atomic():
             evaluation = Evaluation.objects.select_for_update().get(uuid=uuid)
 
-            # ✅ Si ya está corriendo -> no permitir doble ejecución
             if evaluation.status == "PROCESSING":
                 return Response(
                     {"error": "Esta evaluación ya se está ejecutando"},
                     status=status.HTTP_409_CONFLICT,
                 )
 
-            # ✅ Reset seguro antes de correr
             evaluation.status = "PROCESSING"
             evaluation.completed_at = None
             evaluation.save()
 
-            # ✅ Limpiar runs anteriores dentro del lock
             PromptRun.objects.filter(evaluation=evaluation).delete()
             RankingItem.objects.filter(prompt_run__evaluation=evaluation).delete()
             RankingSummary.objects.filter(evaluation=evaluation).delete()
 
         # ==========================
-        # ✅ Ya salimos del lock, empieza el proceso real
+        # ✅ Proceso real
         # ==========================
         try:
             criteria_qs = evaluation.criteria.all().order_by("order")
@@ -198,7 +191,6 @@ class RunEvaluationView(APIView):
 
                 output_text, sources = completion_with_web_search(prompt)
 
-                # ✅ parse JSON tolerante
                 try:
                     decoded = json.loads(output_text) if output_text else {}
                 except Exception:
@@ -214,7 +206,6 @@ class RunEvaluationView(APIView):
                     sources=sources,
                 )
 
-                # ✅ no matar la app si viene mal; simplemente guarda lo que haya (máx 5)
                 for item in parsed[:5]:
                     RankingItem.objects.create(
                         prompt_run=run,
@@ -227,7 +218,7 @@ class RunEvaluationView(APIView):
             compute_brand_summary(evaluation, phase="PHASE1")
 
             # =========================
-            # ✅ PHASE 2 (5 prompts por criterio SIEMPRE)
+            # ✅ PHASE 2 (5 prompts por criterio)
             # =========================
             for criterion_obj in criteria_qs:
                 for _ in range(5):
@@ -267,7 +258,6 @@ class RunEvaluationView(APIView):
 
                 compute_brand_summary(evaluation, phase="PHASE2", criterion=criterion_obj)
 
-            # ✅ SUCCESS
             evaluation.status = "SUCCESS"
             evaluation.completed_at = timezone.now()
             evaluation.save()
@@ -278,7 +268,6 @@ class RunEvaluationView(APIView):
             )
 
         except Exception as e:
-            # ✅ Cualquier fallo inesperado → marca ERROR
             evaluation.status = "ERROR"
             evaluation.save()
             return Response(
@@ -293,14 +282,40 @@ class EvaluationReportView(APIView):
         return Response(build_report(evaluation), status=status.HTTP_200_OK)
 
 
+# ✅ NUEVO: HTML liviano para imprimir
+class EvaluationReportPrintView(APIView):
+    """
+    GET /api/results/<uuid>/report/print/
+    Renderiza HTML server-side (sin Next/Recharts) para que Puppeteer lo convierta a PDF sin OOM.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, uuid):
+        evaluation = get_object_or_404(Evaluation, uuid=uuid)
+        report = build_report(evaluation)
+
+        # timestamp human friendly
+        ts = report.get("timestamp")
+        try:
+            dt = parse_datetime(ts) if isinstance(ts, str) else None
+            report["timestamp_human"] = dt.strftime("%Y-%m-%d %H:%M") if dt else str(ts)
+        except Exception:
+            report["timestamp_human"] = str(ts)
+
+        # recortes para mantener igual al front
+        try:
+            if "phase1" in report and "topModels" in report["phase1"]:
+                report["phase1"]["topModels"] = report["phase1"]["topModels"][:10]
+            for c in report.get("phase2", []):
+                c["topBrands"] = (c.get("topBrands") or [])[:12]
+        except Exception:
+            pass
+
+        # tu template está en apps/base/templates/report_print.html
+        return render(request, "report_print.html", {"report": report})
+
+
 def apply_filters(request, qs):
-    """
-    Filtros soportados (query params):
-      - search: busca en nombre/email/movil/evaluation_uuid
-      - nombre, email, movil: icontains
-      - uuid: filtro exacto por evaluation.uuid
-      - ordering: id | -id | nombre | -nombre | email | -email
-    """
     search = (request.GET.get("search") or "").strip()
     nombre = (request.GET.get("nombre") or "").strip()
     email = (request.GET.get("email") or "").strip()
@@ -333,14 +348,9 @@ class InformeDataUsersAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        """
-        LIST con paginación simple:
-          GET /api/results/report/users/?page=1&page_size=20&search=...
-        """
         qs = InformeDataUsers.objects.select_related("evaluation").all()
         qs = apply_filters(request, qs)
 
-        # paginación
         try:
             page = int(request.GET.get("page", "1"))
         except ValueError:
@@ -370,11 +380,6 @@ class InformeDataUsersAPIView(APIView):
         )
 
     def post(self, request):
-        """
-        CREATE:
-          POST /api/results/report/users/
-          body: { uuid, nombre, email, movil? }
-        """
         serializer = InformeDataUsersCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead = serializer.save()
@@ -389,10 +394,6 @@ class InformeDataUsersExportAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        """
-        Excel:
-          GET /api/results/report/users/export/?search=...&uuid=...
-        """
         qs = InformeDataUsers.objects.select_related("evaluation").all()
         qs = apply_filters(request, qs)
 
@@ -439,13 +440,15 @@ class InformeDataUsersExportAPIView(APIView):
 class EvaluationReportPDFView(APIView):
     """
     GET /api/results/<uuid>/report/pdf/
-    Genera PDF renderizando el frontend con Puppeteer.
+    ✅ Ahora genera PDF desde el HTML print server-side (liviano).
     """
     permission_classes = [AllowAny]
 
     def get(self, request, uuid):
-        front_base = getattr(settings, "FRONTEND_BASE_URL", "http://localhost:3000")
-        report_url = f"{front_base}/results/{uuid}?pdf=1"
+        # ✅ IMPORTANTÍSIMO: en prod dentro del contenedor backend, usa localhost
+        # para evitar salir por nginx/dominio.
+        backend_base = getattr(settings, "BACKEND_INTERNAL_URL", "http://127.0.0.1:8000")
+        report_url = f"{backend_base}/api/results/{uuid}/report/print/"
 
         script_path = os.path.join(
             settings.BASE_DIR, "apps", "base", "scripts", "render_report_pdf.js"
@@ -477,6 +480,3 @@ class EvaluationReportPDFView(APIView):
                 status=500,
                 content_type="text/plain",
             )
-        finally:
-            # No se borra aquí por seguridad con FileResponse en algunos entornos.
-            pass
