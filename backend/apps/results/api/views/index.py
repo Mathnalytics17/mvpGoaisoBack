@@ -48,7 +48,10 @@ from apps.results.services.report import build_report
 from apps.results.services.scoring import compute_brand_summary
 from apps.results.utils.open_ai_client import completion_with_web_search
 from apps.results.services.email_report import send_report_pdf_email
+from apps.results.services.email_report import send_report_pdf_email
 
+from rest_framework.permissions import AllowAny
+from apps.results.services.email_report import send_report_pdf_email
 # ✅ helper para seleccionar 5 permutaciones sin repetir el mismo inicio
 def select_permutations_unique_start(permutations_list, count=5):
     selected = []
@@ -262,6 +265,14 @@ class RunEvaluationView(APIView):
             evaluation.completed_at = timezone.now()
             evaluation.save()
 
+            
+# ✅ Enviar automáticamente a tu correo fijo
+            try:
+                to_email = getattr(settings, "REPORT_AUTO_EMAIL_TO", "luisjose0317@gmail.com")
+                send_report_pdf_email(to_email=to_email, uuid_str=str(evaluation.uuid), product_type=evaluation.product_type)
+            except Exception as mail_err:
+                # NO tumbes el SUCCESS por fallo de email (solo log)
+                print("ERROR sending auto report email:", str(mail_err))
             return Response(
                 {"status": evaluation.status, "uuid": str(evaluation.uuid)},
                 status=status.HTTP_200_OK,
@@ -274,6 +285,7 @@ class RunEvaluationView(APIView):
                 {"error": "Error inesperado ejecutando evaluación", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
 
 
 class EvaluationReportView(APIView):
