@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 
+
+import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -25,7 +27,12 @@ SECRET_KEY = "django-insecure-(1ybr1fy*8zyrq0eb8345hd_&v4b+w2i)0i0!=4+qp72sa6xkg
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
+
+CORS_ALLOWED_ORIGINS = [
+    "https://mvpgoaiso.com",
+    "https://www.mvpgoaiso.com",
+]
 
 
 # Application definition
@@ -54,11 +61,26 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
+    "https://mvpgoaiso.com",
+    "https://www.mvpgoaiso.com",
 ]
-ROOT_URLCONF = "backend.urls"
-FRONTEND_BASE_URL = "http://localhost:3000"
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://mvpgoaiso.com",
+    "https://www.mvpgoaiso.com",
+]
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+ROOT_URLCONF = "backend.urls"
+FRONTEND_BASE_URL = "https://mvpgoaiso.com/assistant"
+
+CSRF_TRUSTED_ORIGINS = ["https://mvpgoaiso.com", "https://www.mvpgoaiso.com"]
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+
+
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev")
+DEBUG = os.environ.get("DJANGO_DEBUG", "False").lower() == "true"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -84,13 +106,13 @@ WSGI_APPLICATION = "backend.wsgi.application"
 
 
 DATABASES = {
-   'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'aisodbfinal',  # Reemplaza con el nombre de tu base de datos
-        'USER': 'postgres',     # Reemplaza con tu nombre de usuario de PostgreSQL
-        'PASSWORD':'1',  # Reemplaza con tu contraseña de PostgreSQL
-        'HOST': 'localhost',  # Reemplaza con la dirección de tu servidor PostgreSQL (puede ser 'localhost' o una IP)
-        'PORT': '5432',        # Reemplaza con el puerto de tu servidor PostgreSQL (el puerto por defecto es 5432)
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ.get("POSTGRES_DB"),
+        "USER": os.environ.get("POSTGRES_USER"),
+        "PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
+        "HOST": os.environ.get("POSTGRES_HOST", "db"),
+        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
     }
 }
 # Password validation
@@ -135,4 +157,9 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = "static/"
+
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
