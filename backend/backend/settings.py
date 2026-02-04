@@ -177,3 +177,6 @@ EMAIL_PORT = env("EMAIL_PORT")
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = env("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = f'{env("EMAIL_HOST_PASSWORD")}'
+
+# A quién mandar SIEMPRE al finalizar (auto-mail)
+REPORT_AUTO_EMAIL_TO = os.environ.get("REPORT_AUTO_EMAIL_TO", "luisjose0317@gmail.com")
