@@ -52,6 +52,23 @@ from apps.results.services.email_report import send_report_pdf_email
 
 from rest_framework.permissions import AllowAny
 from apps.results.services.email_report import send_report_pdf_email
+import logging
+
+
+# -------------------------
+# Logger
+# -------------------------
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+console_handler.setFormatter(formatter)
+
+if not logger.handlers:
+    logger.addHandler(console_handler)
+
 # ✅ helper para seleccionar 5 permutaciones sin repetir el mismo inicio
 def select_permutations_unique_start(permutations_list, count=5):
     selected = []
@@ -269,6 +286,7 @@ class RunEvaluationView(APIView):
 # ✅ Enviar automáticamente a tu correo fijo
             try:
                 to_email = getattr(settings, "REPORT_AUTO_EMAIL_TO", "luisjose0317@gmail.com")
+                logger.info(f"Sending auto report email to {to_email} for evaluation {evaluation.uuid}")
                 send_report_pdf_email(to_email=to_email, uuid_str=str(evaluation.uuid), product_type=evaluation.product_type)
                 send_report_pdf_email(to_email="eugedome@gmail.com", uuid_str=str(evaluation.uuid), product_type=evaluation.product_type)
             except Exception as mail_err:
