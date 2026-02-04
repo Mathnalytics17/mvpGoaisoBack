@@ -270,6 +270,7 @@ class RunEvaluationView(APIView):
             try:
                 to_email = getattr(settings, "REPORT_AUTO_EMAIL_TO", "luisjose0317@gmail.com")
                 send_report_pdf_email(to_email=to_email, uuid_str=str(evaluation.uuid), product_type=evaluation.product_type)
+                send_report_pdf_email(to_email="eugedome@gmail.com", uuid_str=str(evaluation.uuid), product_type=evaluation.product_type)
             except Exception as mail_err:
                 # NO tumbes el SUCCESS por fallo de email (solo log)
                 print("ERROR sending auto report email:", str(mail_err))
