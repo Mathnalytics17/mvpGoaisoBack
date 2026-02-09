@@ -294,10 +294,7 @@ export default function ResultsPage() {
                 Cómo se calcula 
               </span>
               <p className="status-note">
-                Para este ranking se toma el producto/servicio y todos los atributos ingresados y el modelo de IA se encarga de hacer el prompt 5 veces. Este prompt consiste en un ranking de productos/servicios en el que segun el puesto donde aparezcan estos recibiran puntos <strong>1º=5</strong>, <strong>2º=4</strong>,{" "}
-                <strong>3º=3</strong>, <strong>4º=2</strong>, <strong>5º=1</strong>. Luego se toma se suma por producto/servicio y tomamos cada total a{" "}
-                <strong>porcentaje sobre 100</strong>. 
-              </p>
+                Este valor porcentual representa de manera cualitativa el número de apariciones y el lugar de aparición.</p>
             </div>
 
             <div className="charts-grid">
