@@ -7,7 +7,7 @@ export default function Header() {
   return (
     <header className="header">
       <div className="header-container">
-        <Link href="/" >
+        <Link href="https://goaiso.com" >
         <div className="logo">
           <Image
             src="/Logo-goaiso.png"
