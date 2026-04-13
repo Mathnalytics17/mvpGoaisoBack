@@ -1,94 +1,198 @@
-
-
+import { useState } from "react";
 
 export default function UseCasePage() {
+  const cases = [
+    {
+      id: "caso-1",
+      tab: "Caso 1",
+      sector: "Sector: Dispositivos Móviles de Alta Gama",
+      perfil: "Director de Marketing / Country Manager",
+      descripcion:
+        'Necesita asegurar que su smartphone insignia aparece en el Top 3 de la IA cuando los usuarios buscan "mejor móvil para fotografía" o "batería de larga duración".',
+      cita: (
+        <>
+          "Comprueba si tu <strong className="text-white">Smartphone Pro</strong> lidera
+          las recomendaciones de la IA por su{" "}
+          <strong className="text-white">Pantalla</strong> y{" "}
+          <strong className="text-white">Autonomía</strong>."
+        </>
+      ),
+      producto: "Galaxy Z-Series 5G (Directores)",
+      icon: (
+        <svg
+          className="w-4 h-4 text-indigo-400 mr-2"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
+          />
+        </svg>
+      ),
+      tags: ["Cámara", "Rendimiento", "Seguridad", "Pantalla", "Autonomía"],
+    },
+    {
+      id: "caso-2",
+      tab: "Caso 2",
+      sector: "Sector: Imagen & Tecnología Pro",
+      perfil: "Director de Producto / Senior Manager",
+      descripcion:
+        "Su objetivo es verificar que su nueva cámara Mirrorless sea la opción predilecta de la IA cuando los profesionales comparan rendimiento en bajas luces o velocidad de enfoque.",
+      cita: (
+        <>
+          "Comprueba si tu <strong className="text-white">Cámara Mirrorless</strong>{" "}
+          lidera las recomendaciones de la IA por su{" "}
+          <strong className="text-white">Resolución</strong> y{" "}
+          <strong className="text-white">Óptica</strong>."
+        </>
+      ),
+      producto: "Lumix Pro X-Series (Full Frame)",
+      icon: (
+        <svg
+          className="w-4 h-4 text-indigo-400 mr-2"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+          />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+          />
+        </svg>
+      ),
+      tags: ["Resolución", "Enfoque", "Sensor", "Velocidad", "Estabilización"],
+    },
+    {
+      id: "caso-3",
+      tab: "Caso 3",
+      sector: "Sector: Seguros e Insurtech",
+      perfil: "Director Comercial / Head of Sales",
+      descripcion:
+        'Su objetivo es auditar si su póliza de salud es la recomendación prioritaria de la IA cuando los directivos buscan "seguros para empresas" o "cobertura internacional".',
+      cita: (
+        <>
+          "Verifica si tu <strong className="text-white">Seguro Corporativo</strong>{" "}
+          lidera las recomendaciones de la IA por su{" "}
+          <strong className="text-white">Red</strong> y{" "}
+          <strong className="text-white">Rapidez</strong>."
+        </>
+      ),
+      producto: "Póliza Global Executive (Sin Copago)",
+      icon: (
+        <svg
+          className="w-4 h-4 text-indigo-400 mr-2"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+          />
+        </svg>
+      ),
+      tags: ["Cobertura", "Digital", "Red", "Reembolso", "Rapidez"],
+    },
+  ];
+
+  const [activeTab, setActiveTab] = useState(0);
+  const currentCase = cases[activeTab];
+
   return (
     <div className="bg-gray-900 flex items-center justify-center min-h-screen p-4">
-      {/* COMIENZO DEL COMPONENTE DE CASO DE USO (DARK MODE) */}
-      <div className="max-w-md w-full bg-gray-800 rounded-2xl shadow-xl border border-gray-700 overflow-hidden">
-        {/* Cabecera del ejemplo */}
-        <div className="bg-gradient-to-r from-gray-800 to-gray-900 px-6 py-5 border-b border-gray-700">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="bg-indigo-500 text-white text-xs font-bold px-2 py-0.5 rounded uppercase tracking-wide">
-              Ejemplo
-            </span>
-            <h3 className="text-gray-200 font-semibold text-sm">
-              Caso de Uso: Banca y Finanzas
-            </h3>
-          </div>
-
-          {/* Texto de introducción / Objetivo */}
-          <p className="text-gray-300 text-sm mb-4 leading-relaxed border-l-2 border-gray-600 pl-3">
-            <strong className="text-white block mb-1">El Objetivo:</strong>
-            Quiere saber si su hipoteca sale recomendada por la IA cuando la gente
-            busca condiciones específicas, no solo por marca.
-          </p>
-
-          {/* La frase entre comillas solicitada */}
-          <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
-            <p className="text-indigo-200 text-sm italic leading-relaxed">
-              "Descubre si tu <strong className="text-white">Hipoteca Joven</strong>{" "}
-              lidera el ranking de la IA gracias a sus{" "}
-              <strong className="text-white">Comisiones</strong> e{" "}
-              <strong className="text-white">Interés</strong>."
-            </p>
-          </div>
+      <div className="w-full max-w-2xl">
+        <div className="flex gap-2 mb-4 justify-center">
+          {cases.map((item, index) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(index)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                activeTab === index
+                  ? "bg-indigo-600 text-white"
+                  : "bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700"
+              }`}
+            >
+              {item.tab}
+            </button>
+          ))}
         </div>
 
-        {/* Cuerpo del formulario simulado */}
-        <div className="p-6 space-y-5">
-          {/* Campo 1: Producto */}
-          <div>
-            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
-              Producto de interés
-            </label>
-
-            <div className="flex items-center bg-gray-900 border border-gray-600 rounded-lg px-3 py-2.5">
-              {/* Icono de casa/banca */}
-              <svg
-                className="w-4 h-4 text-indigo-400 mr-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                />
-              </svg>
-
-              <span className="text-gray-200 text-sm font-medium">
-                Hipoteca Joven Bonificada
+        <div className="max-w-xl mx-auto w-full bg-gray-800 rounded-2xl shadow-xl border border-gray-700 overflow-hidden">
+          <div className="bg-gradient-to-r from-gray-800 to-gray-900 px-6 py-5 border-b border-gray-700">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="bg-indigo-600 text-white text-xs font-bold px-2 py-0.5 rounded uppercase tracking-wide">
+                EJEMPLO
               </span>
+              <h3 className="text-gray-200 font-semibold text-sm">
+                {currentCase.sector}
+              </h3>
+            </div>
+
+            <p className="text-gray-300 text-sm mb-4 leading-relaxed border-l-2 border-indigo-500 pl-3">
+              <strong className="text-white block mb-1">
+                Perfil: {currentCase.perfil}
+              </strong>
+              {currentCase.descripcion}
+            </p>
+
+            <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
+              <p className="text-indigo-200 text-sm italic leading-relaxed">
+                {currentCase.cita}
+              </p>
             </div>
           </div>
 
-          {/* Campo 2: Características (Tags) */}
-          <div>
-            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
-              Características clave (5)
-            </label>
+          <div className="p-6 space-y-5">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
+                Producto de interés
+              </label>
+              <div className="flex items-center bg-gray-900 border border-gray-600 rounded-lg px-3 py-2.5">
+                {currentCase.icon}
+                <span className="text-gray-200 text-sm font-medium">
+                  {currentCase.producto}
+                </span>
+              </div>
+            </div>
 
-            <div className="flex flex-wrap gap-2">
-              {["Comisiones", "Interés", "Online", "Edad", "Vinculación"].map(
-                (tag) => (
+            <div>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                Características clave (5)
+              </label>
+              <div className="flex flex-nowrap items-center gap-3 overflow-x-auto pb-1">
+                {currentCase.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-gray-700 text-indigo-300 border border-gray-600"
+                    className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-gray-700 text-indigo-300 border border-gray-600 whitespace-nowrap"
                   >
-                    # {tag}
+                    {tag}
                   </span>
-                )
-              )}
+                ))}
+              </div>
             </div>
           </div>
         </div>
       </div>
-      {/* FIN DEL COMPONENTE */}
     </div>
   );
 }

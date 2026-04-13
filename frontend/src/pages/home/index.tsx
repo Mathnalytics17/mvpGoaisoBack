@@ -1,5 +1,5 @@
 import { useRouter } from "next/navigation";
-
+import Link from "next/link";
 export default function Home() {
 
   const router = useRouter();
@@ -23,7 +23,9 @@ export default function Home() {
     >
       Comenzar
     </button>
-          <button className="btn-secondary">Ver ejemplo</button>
+         <Link href="/useCase" className="btn-secondary">
+  Ver ejemplo
+</Link>
         </div>
 
         <div className="home-features">
